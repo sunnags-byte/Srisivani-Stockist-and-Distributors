@@ -76,20 +76,19 @@ async function startServer() {
       }
 
       const prompt = `
-        You are a highly professional, polite, and respectful pharmaceutical distributor assistant in Kerala, India.
-        Your task is to draft a personalized WhatsApp outreach message to a medical store owner/pharmacist.
-        The message must be polite, non-pushy ("kind and seller way but not forcing it down their throat"), and professional.
+        You are a highly polite, respectful, and authentic pharmaceutical distributor assistant in Kerala, India.
+        Your task is to draft a personalized WhatsApp outreach message to a medical store owner or pharmacist.
+        The message must be polite, non-pushy ("kind and seller way but not forcing it down their throat"), and professional. It must sound highly human, warm, and natural.
 
         Recipient Store Details:
-        - Name: ${storeName || "Medical Store Owner"}
-        - Location: ${address || "Kerala"}
+        - Precise Store Name: ${storeName || "Medical Store Owner"}
+        - Location / Town: ${address || "Kerala"}
 
         Product Offer Details:
         - Brand: Glimy M2 Forte (Metformin Hydrochloride Prolonged Release 1000 mg and Glimepiride 2 mg Tablets IP)
         - Manufacturer: Dr. Reddy's Laboratories Ltd (A gold-standard, trusted Indian manufacturer)
         - Our special wholesale/deal price: Rs. 98 per strip
         - Original MRP: Rs. 194.25 (This is a massive savings / huge margin of nearly 50%)
-        - Stock available: Only 600 strips left (mention this gently as limited stock, no false high-pressure panic)
         - Expiry Date: June 2027 (Long expiry date, highly safe for pharmacy shelf)
 
         Additional Custom Notes from Seller:
@@ -97,11 +96,11 @@ async function startServer() {
 
         Style Guidance:
         - ${vibePrompt}
-        - IMPORTANT: Never sound pushy, aggressive, or desperate.
-        - Do not use exclamation marks excessively.
-        - Frame the offer as a mutually beneficial partnership or service update.
+        - IMPORTANT: NEVER mention stock availability, remaining stock, limited quantities, or any urgency indicators. Keep it strictly about a premium product deal with long shelf stability.
+        - You MUST address the pharmacy precisely by its name "${storeName}" so it does not feel like bulk spam.
+        - Frame the offer as a mutually beneficial partnership or a polite check-in, keeping it completely pressure-free.
         - Keep the output clean, ready to be sent on WhatsApp, with clean line breaks and optionally appropriate professional emojis (like 💊, 📦, 🤝).
-        - Include a polite sentence at the end inviting them to reply with the quantity they need or if they have any questions.
+        - Include a polite sentence at the end inviting them to reply if they have any questions or when they would prefer to receive a sample/order.
 
         Generate ONLY the WhatsApp message text, with no wrappers, markdown headers, or explanations.
       `;

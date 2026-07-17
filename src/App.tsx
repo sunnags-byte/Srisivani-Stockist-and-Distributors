@@ -87,7 +87,6 @@ export default function App() {
   });
 
   // UI state
-  const [stockRemaining, setStockRemaining] = useState<number>(600);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [geminiAvailable, setGeminiAvailable] = useState<boolean | null>(null);
   const [isUsingGemini, setIsUsingGemini] = useState<boolean>(false);
@@ -118,12 +117,6 @@ export default function App() {
       }
     }
 
-    // Load custom stock counter
-    const savedStock = localStorage.getItem('glimy_stock_remaining');
-    if (savedStock) {
-      setStockRemaining(parseInt(savedStock, 10));
-    }
-
     // Check backend health and Gemini availability
     fetch('/api/health')
       .then(res => res.json())
@@ -143,12 +136,6 @@ export default function App() {
     localStorage.setItem('whatsapp_pharma_stores', JSON.stringify(updatedStores));
   };
 
-  const updateStock = (newStock: number) => {
-    const validStock = Math.max(0, newStock);
-    setStockRemaining(validStock);
-    localStorage.setItem('glimy_stock_remaining', validStock.toString());
-  };
-
   // --- Toast Trigger helper ---
   const triggerToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
     setShowToast({ message, type });
@@ -163,7 +150,7 @@ export default function App() {
   }, [stores, selectedStoreId]);
 
   // --- Rule-Based Local Template Engine (Safe Offline Fallback) ---
-  const generateLocalTemplate = (store: Store, vibeType: VibeType, notes: string, stock: number) => {
+  const generateLocalTemplate = (store: Store, vibeType: VibeType, notes: string) => {
     const storeName = store.name;
     const address = store.address;
     const cleanNotes = notes.trim() ? `\n\n📌 Special Note:\n${notes.trim()}` : '';
@@ -176,25 +163,24 @@ Hope this message finds you well at ${storeName}. We are checking in with local 
 
 We currently have a special price of Rs. 98 per strip (MRP is Rs. 194.25, giving you nearly 50% margin to support your customers). The expiry is far out in June 2027.
 
-We only have about ${stock} strips left in our active batch. No pressure at all, sir—just thought of checking if you would like to secure some strips for your regular diabetic patients at this rate.${cleanNotes}
+No pressure at all, sir—just thought of checking if you would like to secure some strips for your regular diabetic patients at this rate.${cleanNotes}
 
-Have a blessed day! Let us know if you have any questions. 🙏`;
+Have a blessed day! Let us know if you have any questions or when you would prefer us to drop by. 🙏`;
 
       case 'professional':
         return `Dear Purchase Manager,
 ${storeName} (${address})
 
-Subject: Wholesale Stock Offer - Glimy M2 Forte (Dr. Reddy's)
+Subject: Wholesale Product Offer - Glimy M2 Forte (Dr. Reddy's)
 
-We are pleased to offer a limited batch of Glimy M2 Forte 1000mg/2mg tablets from Dr. Reddy's Laboratories at highly competitive wholesale pricing:
+We are pleased to offer Glimy M2 Forte 1000mg/2mg tablets from Dr. Reddy's Laboratories at highly competitive wholesale pricing:
 
 • Product: Glimy M2 Forte
 • Offer Price: Rs. 98 / strip (tax incl.)
 • Retail MRP: Rs. 194.25
 • Expiry Date: June 2027
-• Available Stock: ${stock} strips remaining
 
-This is a highly secure shelf-stable stock from an authorized distribution channel. If you wish to purchase or require further documentation, please reply to this chat.${cleanNotes}
+This is high-grade, shelf-stable stock from an authorized distribution channel. If you wish to purchase or require further documentation, please reply to this chat.${cleanNotes}
 
 Thank you for your valuable time.
 
@@ -204,7 +190,7 @@ Pharma Distribution Team`;
       case 'value_focused':
         return `Attention ${storeName}! Wholesale profit booster deal 💊
 
-Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin. We are liquidating a small surplus batch of ${stock} strips:
+Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin with this premium offer:
 
 💰 Buy Price: Rs. 98 only!
 📈 Retail MRP: Rs. 194.25
@@ -212,35 +198,33 @@ Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin. We are liqui
 
 Help your budget-conscious diabetic patients save nearly 50% on their monthly bills while keeping your pharmacy margins high.${cleanNotes}
 
-Only ${stock} strips left in Kerala distribution. Secure yours now before stock sells out. Let us know your requirement!`;
+Get in touch today to order for your regular patients. Let us know your requirement!`;
 
       case 'concise':
-        return `Namaste ${storeName}, Glimy M2 Forte stock offer:
+        return `Namaste ${storeName}, Glimy M2 Forte product offer:
 
 • Product: Glimy M2 Forte (Metformin 1000mg + Glimepiride 2mg)
 • Brand: Dr. Reddy's
 • Rate: Rs. 98 (MRP 194.25)
-• Expiry: June 2027
-• Stock: ${stock} strips left${cleanNotes}
+• Expiry: June 2027${cleanNotes}
 
 Polite note: Highly discounted price for local pharmacies. Please let us know if you need any strips for your counter stock. Thank you! 🙏`;
 
       case 'malayalam_english':
         return `Namaskaram Chetta, ${storeName} list-il kandumitt vilichathaane. 😊
 
-Nammude kayyil Glimy M2 Forte (Dr. Reddy's) limited stock und. Metformin 1000mg + Glimepiride 2mg combination aanu. 
+Nammude kayyil Glimy M2 Forte (Dr. Reddy's) stock und. Metformin 1000mg + Glimepiride 2mg combination aanu. 
 
 • Price: Rs. 98/strip
 • MRP: Rs. 194.25 (Nalla margin labhikkaam)
 • Expiry: June 2027 (Long expiry)
-• Stock: ${stock} strips mathrame baakki ullu.
 
 Kooduthal patients-um chodhikkunna fast moving medicine aanallo. Nirbhandham onnumilla chetta, customere sahajikkanum nalla margin kittanum nalla oru chance aanu.${cleanNotes ? `\n\nNote: ${cleanNotes}` : ''}
 
 Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aashamsikkunnu! 🙏`;
 
       default:
-        return `Hello from Glimy Distribution, Glimy M2 Forte Dr. Reddy's is available at Rs. 98 (MRP 194.25). Expiry June 2027. Stock remaining: ${stock}. Please let us know if you need any strips.`;
+        return `Hello from Glimy Distribution, Glimy M2 Forte Dr. Reddy's is available at Rs. 98 (MRP 194.25). Expiry June 2027. Please let us know if you need any strips.`;
     }
   };
 
@@ -255,7 +239,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
 
     // If using local templates
     if (!isUsingGemini && !forceGeminiCall) {
-      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes, stockRemaining);
+      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes);
       setGeneratedMessage(msg);
       setIsGenerating(false);
       triggerToast('Polite template generated instantly!', 'success');
@@ -273,7 +257,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
           storeName: selectedStore.name,
           address: selectedStore.address,
           vibe,
-          extraNotes: `${extraNotes}. Current available stock is ${stockRemaining} strips.`
+          extraNotes: extraNotes
         })
       });
 
@@ -283,12 +267,12 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
         triggerToast('AI custom message generated!', 'success');
       } else {
         // Fallback if server throws error or says fallback
-        const msg = generateLocalTemplate(selectedStore, vibe, extraNotes, stockRemaining);
+        const msg = generateLocalTemplate(selectedStore, vibe, extraNotes);
         setGeneratedMessage(msg);
         triggerToast('AI generated a warning, fallback template applied.', 'info');
       }
     } catch (error) {
-      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes, stockRemaining);
+      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes);
       setGeneratedMessage(msg);
       triggerToast('Backend connection failed, offline template used.', 'info');
     } finally {
@@ -300,10 +284,10 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
   useEffect(() => {
     if (selectedStore) {
       // Re-trigger generation with local template as high speed preview
-      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes, stockRemaining);
+      const msg = generateLocalTemplate(selectedStore, vibe, extraNotes);
       setGeneratedMessage(msg);
     }
-  }, [selectedStoreId, vibe, extraNotes, stockRemaining]);
+  }, [selectedStoreId, vibe, extraNotes]);
 
   // --- Add Custom Pharmacy Lead ---
   const handleAddCustomLead = (e: React.FormEvent) => {
@@ -370,12 +354,6 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
 
     saveStoresToLocal(updated);
     triggerToast(`CRM status updated to ${status}!`, 'success');
-
-    // Deduct stock if marked as Completed purchase
-    if (status === 'Completed' && selectedStore?.crmStatus !== 'Completed') {
-      updateStock(stockRemaining - 10); // Assume default deal of 10 strips
-      triggerToast('Sold 10 strips! Stock deducted.', 'success');
-    }
   };
 
   // --- Copy Message To Clipboard ---
@@ -434,12 +412,6 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
       return matchesSearch && matchesType && matchesCrm;
     });
   }, [stores, searchQuery, filterType, filterCrm]);
-
-  // --- Quick Stock Decrement/Increment Buttons ---
-  const quickDeductStock = (amount: number) => {
-    updateStock(stockRemaining - amount);
-    triggerToast(`Deducted ${amount} strips from live stock.`, 'info');
-  };
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-sans antialiased pb-12">
@@ -542,7 +514,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
             </div>
 
             {/* Deal Math Visualizer (Nearly 50% Off!) */}
-            <div className="bg-[#fffbeb] border border-amber-100 rounded-xl p-4 mb-6">
+            <div className="bg-[#fffbeb] border border-amber-100 rounded-xl p-4">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
                   <TrendingUp className="w-3.5 h-3.5" /> High Margin B2B Deal
@@ -568,69 +540,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
               </div>
 
               <div className="mt-3 text-xs text-amber-900 leading-relaxed pt-2.5 border-t border-amber-200/30">
-                You offer the highest-grade diabetic strip for <span className="font-bold text-emerald-800">Rs. 98</span>. Gives Keralite pharmacists substantial retail margins to promote to their regular counter walk-ins!
-              </div>
-            </div>
-
-            {/* Live Stock Remaining Counter */}
-            <div className="border-t border-slate-100 pt-5">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-emerald-700" /> Live Available Stock
-                </span>
-                <span className="text-sm font-bold font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                  {stockRemaining} Strips Left
-                </span>
-              </div>
-
-              {/* Interactive progress bar */}
-              <div className="w-full bg-slate-100 rounded-full h-2.5 mb-3">
-                <div 
-                  className={`h-2.5 rounded-full transition-all duration-500 ${
-                    stockRemaining > 200 ? 'bg-emerald-700' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${Math.min(100, (stockRemaining / 600) * 100)}%` }}
-                ></div>
-              </div>
-
-              {/* Stock control panel */}
-              <div className="bg-slate-50 border border-slate-100 p-3 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider mb-2">
-                  Stock Controller (Simulate Orders)
-                </span>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => quickDeductStock(10)} 
-                    disabled={stockRemaining < 10}
-                    className="flex-1 bg-white hover:bg-slate-100 border border-slate-200 py-1.5 px-2 rounded-lg text-xs font-semibold text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    -10 Strips
-                  </button>
-                  <button 
-                    onClick={() => quickDeductStock(50)} 
-                    disabled={stockRemaining < 50}
-                    className="flex-1 bg-white hover:bg-slate-100 border border-slate-200 py-1.5 px-2 rounded-lg text-xs font-semibold text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    -50 Strips
-                  </button>
-                  <button 
-                    onClick={() => updateStock(600)} 
-                    className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg border border-emerald-200 cursor-pointer"
-                    title="Reset stock to 600"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1000" 
-                    value={stockRemaining} 
-                    onChange={(e) => updateStock(parseInt(e.target.value, 10))}
-                    className="w-full accent-emerald-800 h-1 bg-slate-200 rounded-lg cursor-pointer"
-                  />
-                </div>
+                You offer the highest-grade diabetic strip for <span className="font-bold text-emerald-800">Rs. 98</span>. Gives Keralite pharmacists substantial retail margins to promote to their regular walk-in customers!
               </div>
             </div>
           </div>
