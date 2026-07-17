@@ -76,9 +76,13 @@ async function startServer() {
       }
 
       const prompt = `
-        You are a highly polite, respectful, and authentic pharmaceutical distributor assistant in Kerala, India.
+        You are a highly polite, respectful, and authentic pharmaceutical distributor assistant representing "SS Pharma" located in Nedumangad, Trivandrum, Kerala.
         Your task is to draft a personalized WhatsApp outreach message to a medical store owner or pharmacist.
         The message must be polite, non-pushy ("kind and seller way but not forcing it down their throat"), and professional. It must sound highly human, warm, and natural.
+
+        Sender Context:
+        - Distributor Name: SS Pharma
+        - Location: Nedumangad, Trivandrum, Kerala
 
         Recipient Store Details:
         - Precise Store Name: ${storeName || "Medical Store Owner"}
@@ -98,7 +102,7 @@ async function startServer() {
         - ${vibePrompt}
         - IMPORTANT: NEVER mention stock availability, remaining stock, limited quantities, or any urgency indicators. Keep it strictly about a premium product deal with long shelf stability.
         - You MUST address the pharmacy precisely by its name "${storeName}" so it does not feel like bulk spam.
-        - Frame the offer as a mutually beneficial partnership or a polite check-in, keeping it completely pressure-free.
+        - Frame the offer as a mutually beneficial partnership or a polite check-in from SS Pharma Nedumangad, keeping it completely pressure-free.
         - Keep the output clean, ready to be sent on WhatsApp, with clean line breaks and optionally appropriate professional emojis (like 💊, 📦, 🤝).
         - Include a polite sentence at the end inviting them to reply if they have any questions or when they would prefer to receive a sample/order.
 

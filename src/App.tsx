@@ -25,7 +25,8 @@ import {
   User,
   ShoppingBag,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Download
 } from 'lucide-react';
 import { Store, VibeType, VibeConfig, CustomLeadInput } from './types';
 import { KERALA_STORES } from './data/stores';
@@ -157,7 +158,7 @@ export default function App() {
 
     switch (vibeType) {
       case 'warm_friendly':
-        return `Hello from Glimy Distribution Kerala! 🌿
+        return `Hello from SS Pharma, Nedumangad, Trivandrum! 🌿
 
 Hope this message finds you well at ${storeName}. We are checking in with local pharmacies regarding Dr. Reddy's premium Glimy M2 Forte tablets (Metformin 1000mg + Glimepiride 2mg).
 
@@ -165,13 +166,17 @@ We currently have a special price of Rs. 98 per strip (MRP is Rs. 194.25, giving
 
 No pressure at all, sir—just thought of checking if you would like to secure some strips for your regular diabetic patients at this rate.${cleanNotes}
 
-Have a blessed day! Let us know if you have any questions or when you would prefer us to drop by. 🙏`;
+Have a blessed day! Let us know if you have any questions or when you would prefer us to drop by. 🙏
+
+Warm regards,
+SS Pharma, Nedumangad
+📞 9446452812`;
 
       case 'professional':
         return `Dear Purchase Manager,
 ${storeName} (${address})
 
-Subject: Wholesale Product Offer - Glimy M2 Forte (Dr. Reddy's)
+Subject: Wholesale Product Offer - Glimy M2 Forte (Dr. Reddy's) - SS Pharma
 
 We are pleased to offer Glimy M2 Forte 1000mg/2mg tablets from Dr. Reddy's Laboratories at highly competitive wholesale pricing:
 
@@ -179,16 +184,19 @@ We are pleased to offer Glimy M2 Forte 1000mg/2mg tablets from Dr. Reddy's Labor
 • Offer Price: Rs. 98 / strip (tax incl.)
 • Retail MRP: Rs. 194.25
 • Expiry Date: June 2027
+• Supplier: SS Pharma, Nedumangad, Trivandrum
 
 This is high-grade, shelf-stable stock from an authorized distribution channel. If you wish to purchase or require further documentation, please reply to this chat.${cleanNotes}
 
 Thank you for your valuable time.
 
 Best regards,
-Pharma Distribution Team`;
+Purchase & Distribution Team
+SS Pharma, Nedumangad
+Trivandrum, Kerala`;
 
       case 'value_focused':
-        return `Attention ${storeName}! Wholesale profit booster deal 💊
+        return `Attention ${storeName}! Wholesale profit booster deal from SS Pharma 💊
 
 Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin with this premium offer:
 
@@ -198,10 +206,14 @@ Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin with this pre
 
 Help your budget-conscious diabetic patients save nearly 50% on their monthly bills while keeping your pharmacy margins high.${cleanNotes}
 
-Get in touch today to order for your regular patients. Let us know your requirement!`;
+Get in touch today to order for your regular patients. Let us know your requirement!
+
+Best regards,
+SS Pharma, Nedumangad
+Trivandrum`;
 
       case 'concise':
-        return `Namaste ${storeName}, Glimy M2 Forte product offer:
+        return `Namaste ${storeName}, Glimy M2 Forte product offer from SS Pharma (Nedumangad):
 
 • Product: Glimy M2 Forte (Metformin 1000mg + Glimepiride 2mg)
 • Brand: Dr. Reddy's
@@ -211,7 +223,7 @@ Get in touch today to order for your regular patients. Let us know your requirem
 Polite note: Highly discounted price for local pharmacies. Please let us know if you need any strips for your counter stock. Thank you! 🙏`;
 
       case 'malayalam_english':
-        return `Namaskaram Chetta, ${storeName} list-il kandumitt vilichathaane. 😊
+        return `Namaskaram Chetta, ${storeName} list-il kandumitt vilichathaane. SS Pharma Nedumangad-il ninnum aanu. 😊
 
 Nammude kayyil Glimy M2 Forte (Dr. Reddy's) stock und. Metformin 1000mg + Glimepiride 2mg combination aanu. 
 
@@ -224,7 +236,7 @@ Kooduthal patients-um chodhikkunna fast moving medicine aanallo. Nirbhandham onn
 Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aashamsikkunnu! 🙏`;
 
       default:
-        return `Hello from Glimy Distribution, Glimy M2 Forte Dr. Reddy's is available at Rs. 98 (MRP 194.25). Expiry June 2027. Please let us know if you need any strips.`;
+        return `Hello from SS Pharma (Nedumangad, Trivandrum). Glimy M2 Forte Dr. Reddy's is available at Rs. 98 (MRP 194.25). Expiry June 2027. Please let us know if you need any strips.`;
     }
   };
 
@@ -288,6 +300,39 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
       setGeneratedMessage(msg);
     }
   }, [selectedStoreId, vibe, extraNotes]);
+
+  // --- Copy / Download Product Image for Easy WhatsApp Sharing ---
+  const handleCopyImageToClipboard = async () => {
+    try {
+      const response = await fetch(glimyProductImg);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+      triggerToast('Product photo copied to clipboard! Paste it directly into WhatsApp (Ctrl+V / Cmd+V).', 'success');
+    } catch (err) {
+      // Fallback: trigger quick download
+      const link = document.createElement('a');
+      link.href = glimyProductImg;
+      link.download = 'Glimy_M2_Forte_DrReddys.jpg';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      triggerToast('Downloaded product image! You can drag and drop it into WhatsApp.', 'info');
+    }
+  };
+
+  const handleDownloadImage = () => {
+    const link = document.createElement('a');
+    link.href = glimyProductImg;
+    link.download = 'Glimy_M2_Forte_DrReddys.jpg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    triggerToast('Product image downloaded successfully!', 'success');
+  };
 
   // --- Add Custom Pharmacy Lead ---
   const handleAddCustomLead = (e: React.FormEvent) => {
@@ -489,12 +534,30 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
 
             {/* Real Product Image from Upload Photo & Detailes */}
             <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 bg-slate-50 shadow-inner group relative">
-              <img 
-                src={glimyProductImg} 
-                alt="Glimy M2 Forte Dr. Reddy's Pack" 
-                referrerPolicy="no-referrer"
-                className="w-full h-48 object-cover object-center group-hover:scale-105 transition-transform duration-500"
-              />
+              <div className="relative">
+                <img 
+                  src={glimyProductImg} 
+                  alt="Glimy M2 Forte Dr. Reddy's Pack" 
+                  referrerPolicy="no-referrer"
+                  className="w-full h-48 object-cover object-center group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+                  <button 
+                    onClick={handleCopyImageToClipboard}
+                    className="bg-white/90 hover:bg-white text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy
+                  </button>
+                  <button 
+                    onClick={handleDownloadImage}
+                    className="bg-emerald-850 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download
+                  </button>
+                </div>
+              </div>
               <div className="p-4 bg-white border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-100">
@@ -510,6 +573,24 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
                 <p className="text-[11px] text-slate-500 mt-0.5">
                   Dr. Reddy's Metformin & Glimepiride Tablets IP
                 </p>
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+                  <button 
+                    onClick={handleCopyImageToClipboard}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
+                    title="Copy Image to clipboard so you can paste it directly in WhatsApp"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    Copy Image
+                  </button>
+                  <button 
+                    onClick={handleDownloadImage}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold border border-emerald-200 transition-colors cursor-pointer"
+                    title="Download the image file to drag/drop into WhatsApp"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-600" />
+                    Download
+                  </button>
+                </div>
               </div>
             </div>
 
