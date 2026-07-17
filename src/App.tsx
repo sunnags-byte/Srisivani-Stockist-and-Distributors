@@ -30,7 +30,8 @@ import {
 } from 'lucide-react';
 import { Store, VibeType, VibeConfig, CustomLeadInput } from './types';
 import { KERALA_STORES } from './data/stores';
-import glimyProductImg from './assets/images/glimy_m2_forte_box_1784264299552.jpg';
+import glimyFrontImg from './assets/images/glimy_m2_forte_front_box_1784265739747.jpg';
+import glimyBackImg from './assets/images/glimy_m2_forte_back_box_1784265756828.jpg';
 
 // Define the custom vibes available for selection
 const VIBES: VibeConfig[] = [
@@ -86,6 +87,9 @@ export default function App() {
     hours: 'Closes 21:00',
     notes: ''
   });
+
+  const [imageSide, setImageSide] = useState<'front' | 'back'>('front');
+  const [mobileTab, setMobileTab] = useState<'stores' | 'composer' | 'product'>('stores');
 
   // UI state
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -303,35 +307,39 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
 
   // --- Copy / Download Product Image for Easy WhatsApp Sharing ---
   const handleCopyImageToClipboard = async () => {
+    const activeImg = imageSide === 'front' ? glimyFrontImg : glimyBackImg;
+    const activeName = imageSide === 'front' ? 'Glimy_M2_Forte_Front.jpg' : 'Glimy_M2_Forte_Composition_Back.jpg';
     try {
-      const response = await fetch(glimyProductImg);
+      const response = await fetch(activeImg);
       const blob = await response.blob();
       await navigator.clipboard.write([
         new ClipboardItem({
           [blob.type]: blob
         })
       ]);
-      triggerToast('Product photo copied to clipboard! Paste it directly into WhatsApp (Ctrl+V / Cmd+V).', 'success');
+      triggerToast(`Product ${imageSide} photo copied to clipboard! Paste it directly into WhatsApp (Ctrl+V / Cmd+V).`, 'success');
     } catch (err) {
       // Fallback: trigger quick download
       const link = document.createElement('a');
-      link.href = glimyProductImg;
-      link.download = 'Glimy_M2_Forte_DrReddys.jpg';
+      link.href = activeImg;
+      link.download = activeName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      triggerToast('Downloaded product image! You can drag and drop it into WhatsApp.', 'info');
+      triggerToast(`Downloaded product ${imageSide} image! You can drag and drop it into WhatsApp.`, 'info');
     }
   };
 
   const handleDownloadImage = () => {
+    const activeImg = imageSide === 'front' ? glimyFrontImg : glimyBackImg;
+    const activeName = imageSide === 'front' ? 'Glimy_M2_Forte_Front.jpg' : 'Glimy_M2_Forte_Composition_Back.jpg';
     const link = document.createElement('a');
-    link.href = glimyProductImg;
-    link.download = 'Glimy_M2_Forte_DrReddys.jpg';
+    link.href = activeImg;
+    link.download = activeName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    triggerToast('Product image downloaded successfully!', 'success');
+    triggerToast(`Product ${imageSide} image downloaded successfully!`, 'success');
   };
 
   // --- Add Custom Pharmacy Lead ---
@@ -509,12 +517,49 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
           </div>
         </div>
       </header>
+ 
+      {/* Mobile Sticky Tab Navigation */}
+      <div className="lg:hidden sticky top-[73px] z-30 bg-white border-b border-slate-200 p-2.5 flex gap-1.5 shadow-xs">
+        <button
+          onClick={() => setMobileTab('stores')}
+          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === 'stores' 
+              ? 'bg-emerald-800 text-white shadow-sm' 
+              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+          }`}
+        >
+          <span className="text-sm">🏪</span>
+          <span>Stores ({filteredStores.length})</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('composer')}
+          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === 'composer' 
+              ? 'bg-emerald-800 text-white shadow-sm' 
+              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+          }`}
+        >
+          <span className="text-sm">✍️</span>
+          <span>Composer</span>
+        </button>
+        <button
+          onClick={() => setMobileTab('product')}
+          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === 'product' 
+              ? 'bg-emerald-800 text-white shadow-sm' 
+              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+          }`}
+        >
+          <span className="text-sm">📦</span>
+          <span>Product Info</span>
+        </button>
+      </div>
 
       {/* --- Main Dashboard Container --- */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* ================= LEFT GRID: THE PRODUCT & ACTIVE BATCH VISUALIZER ================= */}
-        <section className="col-span-1 lg:col-span-4 flex flex-col gap-6" id="product-section">
+        <section className={`col-span-1 lg:col-span-4 flex-col gap-6 lg:flex ${mobileTab === 'product' ? 'flex' : 'hidden'}`} id="product-section">
           
           {/* --- Glimy M2 Forte Interactive Physical Medicine Box --- */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6 overflow-hidden relative">
@@ -533,11 +578,36 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
             </div>
 
             {/* Real Product Image from Upload Photo & Detailes */}
+            <div className="mb-2">
+              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg mb-3">
+                <button
+                  onClick={() => setImageSide('front')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    imageSide === 'front' 
+                      ? 'bg-white text-emerald-850 shadow-xs border border-slate-200/50' 
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  Front Packaging
+                </button>
+                <button
+                  onClick={() => setImageSide('back')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                    imageSide === 'back' 
+                      ? 'bg-white text-emerald-850 shadow-xs border border-slate-200/50' 
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                  }`}
+                >
+                  Back (Composition)
+                </button>
+              </div>
+            </div>
+
             <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 bg-slate-50 shadow-inner group relative">
               <div className="relative">
                 <img 
-                  src={glimyProductImg} 
-                  alt="Glimy M2 Forte Dr. Reddy's Pack" 
+                  src={imageSide === 'front' ? glimyFrontImg : glimyBackImg} 
+                  alt={imageSide === 'front' ? "Glimy M2 Forte Front" : "Glimy M2 Forte Back Composition"} 
                   referrerPolicy="no-referrer"
                   className="w-full h-48 object-cover object-center group-hover:scale-105 transition-transform duration-500"
                 />
@@ -659,7 +729,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
         </section>
 
         {/* ================= CENTER GRID: MASS CUSTOMIZER & LIVE MESSAGE PREVIEW ================= */}
-        <section className="col-span-1 lg:col-span-5 flex flex-col gap-6" id="composer-section">
+        <section className={`col-span-1 lg:col-span-5 flex-col gap-6 lg:flex ${mobileTab === 'composer' ? 'flex' : 'hidden'}`} id="composer-section">
           
           {/* --- Vibe Tone Selector --- */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6">
@@ -728,6 +798,12 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMobileTab('stores')}
+                  className="lg:hidden text-[10px] font-bold text-emerald-850 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-200 mr-1.5 cursor-pointer"
+                >
+                  ← List
+                </button>
                 {isEditingMessage ? (
                   <button 
                     onClick={() => setIsEditingMessage(false)}
@@ -889,7 +965,7 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
         </section>
 
         {/* ================= RIGHT GRID: SEARCHABLE PHARMACIES & CRM MANAGEMENT ================= */}
-        <section className="col-span-1 lg:col-span-3 lg:col-start-10 flex flex-col gap-6" id="leads-section">
+        <section className={`col-span-1 lg:col-span-3 lg:col-start-10 flex-col gap-6 lg:flex ${mobileTab === 'stores' ? 'flex' : 'hidden'}`} id="leads-section">
           
           {/* --- Custom Lead Adder Form --- */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5">
@@ -1073,7 +1149,12 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
                   return (
                     <div
                       key={s.id}
-                      onClick={() => setSelectedStoreId(s.id)}
+                      onClick={() => {
+                        setSelectedStoreId(s.id);
+                        if (window.innerWidth < 1024) {
+                          setMobileTab('composer');
+                        }
+                      }}
                       className={`p-3 rounded-xl border transition-all text-left flex flex-col gap-1 cursor-pointer relative ${
                         isSelected 
                           ? 'bg-emerald-50/20 border-emerald-400 ring-1 ring-emerald-400/20 shadow-2xs' 
