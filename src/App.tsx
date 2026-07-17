@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocalStorage } from './hooks/useLocalStorage';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Phone, 
@@ -70,13 +71,13 @@ const VIBES: VibeConfig[] = [
 export default function App() {
   // --- States ---
   const [stores, setStores] = useState<Store[]>([]);
-  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
-  const [vibe, setVibe] = useState<VibeType>('warm_friendly');
-  const [extraNotes, setExtraNotes] = useState<string>('');
+  const [selectedStoreId, setSelectedStoreId] = useLocalStorage<string>('app_selectedStoreId', '');
+  const [vibe, setVibe] = useLocalStorage<VibeType>('app_vibe', 'warm_friendly');
+  const [extraNotes, setExtraNotes] = useLocalStorage<string>('app_extraNotes', '');
   const [generatedMessage, setGeneratedMessage] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterType, setFilterType] = useState<'all' | 'mobile' | 'landline'>('mobile');
-  const [filterCrm, setFilterCrm] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useLocalStorage<string>('app_searchQuery', '');
+  const [filterType, setFilterType] = useLocalStorage<'all' | 'mobile' | 'landline'>('app_filterType', 'mobile');
+  const [filterCrm, setFilterCrm] = useLocalStorage<string>('app_filterCrm', 'All');
   
   // Custom lead fields
   const [isAddingLead, setIsAddingLead] = useState<boolean>(false);
@@ -89,12 +90,15 @@ export default function App() {
   });
 
   const [imageSide, setImageSide] = useState<'front' | 'back'>('front');
-  const [mobileTab, setMobileTab] = useState<'stores' | 'composer' | 'product'>('stores');
+  const [mobileTab, setMobileTab] = useLocalStorage<'stores' | 'composer' | 'product'>('app_mobileTab', 'stores');
+  const [viewMode, setViewMode] = useLocalStorage<'interactive' | 'all-in-one'>('app_viewMode', 'all-in-one');
+  const [generatingStoreId, setGeneratingStoreId] = useState<string | null>(null);
+  const [copiedStoreId, setCopiedStoreId] = useState<string | null>(null);
 
   // UI state
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [geminiAvailable, setGeminiAvailable] = useState<boolean | null>(null);
-  const [isUsingGemini, setIsUsingGemini] = useState<boolean>(false);
+  const [isUsingGemini, setIsUsingGemini] = useLocalStorage<boolean>('app_isUsingGemini', false);
   const [showToast, setShowToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isEditingMessage, setIsEditingMessage] = useState<boolean>(false);
 
@@ -102,24 +106,48 @@ export default function App() {
   useEffect(() => {
     // Check if there is data in localStorage, else populate with default list
     const saved = localStorage.getItem('whatsapp_pharma_stores');
+    let loadedStores = KERALA_STORES;
+
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        setStores(parsed);
-        if (parsed.length > 0) {
-          setSelectedStoreId(parsed[0].id);
+        const parsed = JSON.parse(saved) as Store[];
+        const customLeads = parsed.filter(s => s.isCustom);
+        
+        // Deduplicate custom leads by phone number to fix repeating numbers issue
+        const uniqueCustomLeadsMap = new Map<string, Store>();
+        const keralaStorePhones = new Set(KERALA_STORES.map(s => s.phone));
+        
+        for (const lead of customLeads) {
+          if (!uniqueCustomLeadsMap.has(lead.phone) && !keralaStorePhones.has(lead.phone)) {
+            uniqueCustomLeadsMap.set(lead.phone, lead);
+          }
         }
+        const uniqueCustomLeads = Array.from(uniqueCustomLeadsMap.values());
+        
+        loadedStores = KERALA_STORES.map(ks => {
+          const matchingOld = parsed.find(ps => ps.id === ks.id || ps.phone === ks.phone);
+          if (matchingOld) {
+            return {
+              ...ks,
+              crmStatus: matchingOld.crmStatus === 'None' ? ks.crmStatus : matchingOld.crmStatus,
+              customMessage: matchingOld.customMessage,
+              lastMessagedAt: matchingOld.lastMessagedAt
+            };
+          }
+          return ks;
+        });
+        
+        loadedStores = [...uniqueCustomLeads, ...loadedStores];
       } catch (e) {
-        setStores(KERALA_STORES);
-        if (KERALA_STORES.length > 0) {
-          setSelectedStoreId(KERALA_STORES[0].id);
-        }
+        console.error('Failed to parse stores', e);
       }
-    } else {
-      setStores(KERALA_STORES);
-      if (KERALA_STORES.length > 0) {
-        setSelectedStoreId(KERALA_STORES[0].id);
-      }
+    }
+    
+    setStores(loadedStores);
+    localStorage.setItem('whatsapp_pharma_stores', JSON.stringify(loadedStores));
+    
+    if (loadedStores.length > 0 && !selectedStoreId) {
+      setSelectedStoreId(loadedStores[0].id);
     }
 
     // Check backend health and Gemini availability
@@ -166,9 +194,9 @@ export default function App() {
 
 Hope this message finds you well at ${storeName}. We are checking in with local pharmacies regarding Dr. Reddy's premium Glimy M2 Forte tablets (Metformin 1000mg + Glimepiride 2mg).
 
-We currently have a special price of Rs. 98 per strip (MRP is Rs. 194.25, giving you nearly 50% margin to support your customers). The expiry is far out in June 2027.
+We currently have a special price of Rs. 98 per box of 30 tablets (MRP is Rs. 194.25, giving you nearly 50% margin to support your customers). The expiry is far out in June 2027.
 
-No pressure at all, sir—just thought of checking if you would like to secure some strips for your regular diabetic patients at this rate.${cleanNotes}
+No pressure at all, sir—just thought of checking if you would like to secure some boxes for your regular diabetic patients at this rate.${cleanNotes}
 
 Have a blessed day! Let us know if you have any questions or when you would prefer us to drop by. 🙏
 
@@ -185,8 +213,8 @@ Subject: Wholesale Product Offer - Glimy M2 Forte (Dr. Reddy's) - SS Pharma
 We are pleased to offer Glimy M2 Forte 1000mg/2mg tablets from Dr. Reddy's Laboratories at highly competitive wholesale pricing:
 
 • Product: Glimy M2 Forte
-• Offer Price: Rs. 98 / strip (tax incl.)
-• Retail MRP: Rs. 194.25
+• Offer Price: Rs. 98 / box (30 Tablets, tax incl.)
+• Retail MRP: Rs. 194.25 per box
 • Expiry Date: June 2027
 • Supplier: SS Pharma, Nedumangad, Trivandrum
 
@@ -204,7 +232,7 @@ Trivandrum, Kerala`;
 
 Stock up on Glimy M2 Forte from Dr. Reddy's and double your margin with this premium offer:
 
-💰 Buy Price: Rs. 98 only!
+💰 Buy Price: Rs. 98 only per box (30 Tablets)!
 📈 Retail MRP: Rs. 194.25
 📅 Expiry: June 2027
 
@@ -221,17 +249,17 @@ Trivandrum`;
 
 • Product: Glimy M2 Forte (Metformin 1000mg + Glimepiride 2mg)
 • Brand: Dr. Reddy's
-• Rate: Rs. 98 (MRP 194.25)
+• Rate: Rs. 98 per box of 30s (MRP 194.25)
 • Expiry: June 2027${cleanNotes}
 
-Polite note: Highly discounted price for local pharmacies. Please let us know if you need any strips for your counter stock. Thank you! 🙏`;
+Polite note: Highly discounted price for local pharmacies. Please let us know if you need any boxes for your counter stock. Thank you! 🙏`;
 
       case 'malayalam_english':
         return `Namaskaram Chetta, ${storeName} list-il kandumitt vilichathaane. SS Pharma Nedumangad-il ninnum aanu. 😊
 
 Nammude kayyil Glimy M2 Forte (Dr. Reddy's) stock und. Metformin 1000mg + Glimepiride 2mg combination aanu. 
 
-• Price: Rs. 98/strip
+• Price: Rs. 98/box (30 Tablets)
 • MRP: Rs. 194.25 (Nalla margin labhikkaam)
 • Expiry: June 2027 (Long expiry)
 
@@ -240,7 +268,7 @@ Kooduthal patients-um chodhikkunna fast moving medicine aanallo. Nirbhandham onn
 Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aashamsikkunnu! 🙏`;
 
       default:
-        return `Hello from SS Pharma (Nedumangad, Trivandrum). Glimy M2 Forte Dr. Reddy's is available at Rs. 98 (MRP 194.25). Expiry June 2027. Please let us know if you need any strips.`;
+        return `Hello from SS Pharma (Nedumangad, Trivandrum). Glimy M2 Forte Dr. Reddy's is available at Rs. 98 per box (MRP 194.25). Expiry June 2027. Please let us know if you need any boxes.`;
     }
   };
 
@@ -415,6 +443,91 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
     triggerToast('Message copied to clipboard! Ready to paste.', 'success');
   };
 
+  // --- All-In-One Hub: Generate Gemini for Single Store ---
+  const handleGenerateGeminiForStore = async (store: Store) => {
+    if (!isUsingGemini) {
+      triggerToast('Please turn on Gemini AI first.', 'error');
+      return;
+    }
+    setGeneratingStoreId(store.id);
+    try {
+      const res = await fetch('/api/generate-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          storeName: store.name,
+          address: store.address,
+          vibe,
+          extraNotes: extraNotes
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.message) {
+        const updated = stores.map(s => s.id === store.id ? { ...s, customMessage: data.message } : s);
+        saveStoresToLocal(updated);
+        triggerToast(`Gemini AI message generated for ${store.name}!`, 'success');
+      } else {
+        const localMsg = generateLocalTemplate(store, vibe, extraNotes);
+        const updated = stores.map(s => s.id === store.id ? { ...s, customMessage: localMsg } : s);
+        saveStoresToLocal(updated);
+        triggerToast('AI was busy, fell back to local template.', 'info');
+      }
+    } catch (error) {
+      const localMsg = generateLocalTemplate(store, vibe, extraNotes);
+      const updated = stores.map(s => s.id === store.id ? { ...s, customMessage: localMsg } : s);
+      saveStoresToLocal(updated);
+      triggerToast('Offline, generated local template.', 'info');
+    } finally {
+      setGeneratingStoreId(null);
+    }
+  };
+
+  // --- All-In-One Hub: Copy Single Message ---
+  const handleCopyStoreMessageToClipboard = (storeId: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedStoreId(storeId);
+    triggerToast('Store custom message copied to clipboard!', 'success');
+    setTimeout(() => {
+      setCopiedStoreId(null);
+    }, 2000);
+  };
+
+  // --- All-In-One Hub: Send Single WhatsApp ---
+  const handleSendStoreWhatsApp = (store: Store, text: string) => {
+    let cleanPhone = store.phone.replace(/\D/g, '');
+    if (cleanPhone.length === 10) {
+      cleanPhone = `91${cleanPhone}`;
+    }
+
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodedText}`;
+    window.open(whatsappUrl, '_blank');
+
+    // Auto update status to Messaged if None
+    if (!store.crmStatus || store.crmStatus === 'None') {
+      handleUpdateCrmStatus(store.id, 'Messaged');
+    } else {
+      triggerToast('Redirecting to WhatsApp chat...', 'info');
+    }
+  };
+
+  // --- All-In-One Hub: Reset All Statuses ---
+  const handleResetAllCrmStatuses = () => {
+    if (window.confirm('Are you sure you want to reset all CRM statuses and last messaged dates? This clears your progress checklist.')) {
+      const updated = stores.map(s => ({
+        ...s,
+        crmStatus: 'None' as const,
+        lastMessagedAt: undefined,
+        customMessage: undefined // clear custom edits too if requested
+      }));
+      saveStoresToLocal(updated);
+      triggerToast('All store statuses and custom message edits have been reset.', 'success');
+    }
+  };
+
   // --- WhatsApp Redirection Helper ---
   const handleLaunchWhatsApp = () => {
     if (!selectedStore) return;
@@ -517,732 +630,408 @@ Venamenkil parayane, nammal deliver cheyyam. Thank you, nalla oru divasam aasham
           </div>
         </div>
       </header>
- 
-      {/* Mobile Sticky Tab Navigation */}
-      <div className="lg:hidden sticky top-[73px] z-30 bg-white border-b border-slate-200 p-2.5 flex gap-1.5 shadow-xs">
-        <button
-          onClick={() => setMobileTab('stores')}
-          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            mobileTab === 'stores' 
-              ? 'bg-emerald-800 text-white shadow-sm' 
-              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-          }`}
-        >
-          <span className="text-sm">🏪</span>
-          <span>Stores ({filteredStores.length})</span>
-        </button>
-        <button
-          onClick={() => setMobileTab('composer')}
-          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            mobileTab === 'composer' 
-              ? 'bg-emerald-800 text-white shadow-sm' 
-              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-          }`}
-        >
-          <span className="text-sm">✍️</span>
-          <span>Composer</span>
-        </button>
-        <button
-          onClick={() => setMobileTab('product')}
-          className={`flex-1 py-2 px-1 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            mobileTab === 'product' 
-              ? 'bg-emerald-800 text-white shadow-sm' 
-              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
-          }`}
-        >
-          <span className="text-sm">📦</span>
-          <span>Product Info</span>
-        </button>
-      </div>
-
-      {/* --- Main Dashboard Container --- */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* ================= LEFT GRID: THE PRODUCT & ACTIVE BATCH VISUALIZER ================= */}
-        <section className={`col-span-1 lg:col-span-4 flex-col gap-6 lg:flex ${mobileTab === 'product' ? 'flex' : 'hidden'}`} id="product-section">
+      {/* Primary View Mode Switcher (Desktop & Mobile) */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 mt-6 space-y-6">
           
-          {/* --- Glimy M2 Forte Interactive Physical Medicine Box --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6 overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          {/* --- Summary Pipeline Statistics Bar --- */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white border border-slate-100 rounded-2xl p-5 shadow-xs">
+            <div className="text-center md:text-left border-r border-slate-100/60 last:border-0 pr-2">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Pipeline</span>
+              <div className="text-xl sm:text-2xl font-extrabold text-slate-800 font-mono mt-0.5">
+                {filteredStores.length} <span className="text-xs font-normal text-slate-400">Leads</span>
+              </div>
+            </div>
+            <div className="text-center md:text-left border-r border-slate-100/60 last:border-0 pr-2 md:pl-4">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-blue-500">Messaged</span>
+              <div className="text-xl sm:text-2xl font-extrabold text-blue-600 font-mono mt-0.5">
+                {stores.filter(s => s.crmStatus === 'Messaged').length}
+              </div>
+            </div>
+            <div className="text-center md:text-left border-r border-slate-100/60 last:border-0 pr-2 md:pl-4">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-amber-500">Interested</span>
+              <div className="text-xl sm:text-2xl font-extrabold text-amber-600 font-mono mt-0.5">
+                {stores.filter(s => s.crmStatus === 'Interested').length}
+              </div>
+            </div>
+            <div className="text-center md:text-left md:pl-4 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-600">Orders Secured</span>
+                <div className="text-xl sm:text-2xl font-extrabold text-emerald-800 font-mono mt-0.5">
+                  {stores.filter(s => s.crmStatus === 'Completed').length}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            {/* Pharmacy Brand Label */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] uppercase tracking-wider bg-red-50 text-red-600 px-2.5 py-0.5 rounded-full font-bold border border-red-100">
-                  Rx Prescription Only
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-slate-400 font-mono block">Mfr Code: DR.REDDY</span>
-              </div>
-            </div>
-
-            {/* Real Product Image from Upload Photo & Detailes */}
-            <div className="mb-2">
-              <div className="flex gap-1.5 p-1 bg-slate-100 rounded-lg mb-3">
-                <button
-                  onClick={() => setImageSide('front')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                    imageSide === 'front' 
-                      ? 'bg-white text-emerald-850 shadow-xs border border-slate-200/50' 
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
-                >
-                  Front Packaging
-                </button>
-                <button
-                  onClick={() => setImageSide('back')}
-                  className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer ${
-                    imageSide === 'back' 
-                      ? 'bg-white text-emerald-850 shadow-xs border border-slate-200/50' 
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
-                >
-                  Back (Composition)
-                </button>
-              </div>
-            </div>
-
-            <div className="border border-slate-200 rounded-xl overflow-hidden mb-6 bg-slate-50 shadow-inner group relative">
-              <div className="relative">
-                <img 
-                  src={imageSide === 'front' ? glimyFrontImg : glimyBackImg} 
-                  alt={imageSide === 'front' ? "Glimy M2 Forte Front" : "Glimy M2 Forte Back Composition"} 
-                  referrerPolicy="no-referrer"
-                  className="w-full h-48 object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
-                  <button 
-                    onClick={handleCopyImageToClipboard}
-                    className="bg-white/90 hover:bg-white text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy
-                  </button>
-                  <button 
-                    onClick={handleDownloadImage}
-                    className="bg-emerald-850 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-md flex items-center gap-1 cursor-pointer transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Download
-                  </button>
-                </div>
-              </div>
-              <div className="p-4 bg-white border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-100">
-                    Active Verified Batch
-                  </span>
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-mono font-bold">
-                    June 2027 Expiry
-                  </span>
-                </div>
-                <div className="mt-2 text-sm font-bold text-slate-800 leading-tight">
-                  Glimy M2 Forte (1000mg/2mg)
-                </div>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Dr. Reddy's Metformin & Glimepiride Tablets IP
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-                  <button 
-                    onClick={handleCopyImageToClipboard}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
-                    title="Copy Image to clipboard so you can paste it directly in WhatsApp"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-slate-500" />
-                    Copy Image
-                  </button>
-                  <button 
-                    onClick={handleDownloadImage}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-semibold border border-emerald-200 transition-colors cursor-pointer"
-                    title="Download the image file to drag/drop into WhatsApp"
-                  >
-                    <Download className="w-3.5 h-3.5 text-emerald-600" />
-                    Download
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Deal Math Visualizer (Nearly 50% Off!) */}
-            <div className="bg-[#fffbeb] border border-amber-100 rounded-xl p-4">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" /> High Margin B2B Deal
-                </span>
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-200">
-                  Save 49.5%
-                </span>
-              </div>
+            {/* ================= LEFT BATCH CONTROLLER PANEL (SPAN 4) ================= */}
+            <aside className="col-span-1 lg:col-span-4 space-y-6">
               
-              <div className="grid grid-cols-2 gap-4 divide-x divide-amber-200/50 mt-1">
-                <div>
-                  <span className="text-[10px] text-slate-500 block">Your Deal Price</span>
-                  <div className="text-2xl font-black text-emerald-800 font-mono">
-                    Rs. 98 <span className="text-xs font-normal text-slate-500">/ strip</span>
-                  </div>
-                </div>
-                <div className="pl-4">
-                  <span className="text-[10px] text-slate-500 block">Retail MRP</span>
-                  <div className="text-lg font-bold text-slate-400 line-through font-mono">
-                    Rs. 194.25
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-xs text-amber-900 leading-relaxed pt-2.5 border-t border-amber-200/30">
-                You offer the highest-grade diabetic strip for <span className="font-bold text-emerald-800">Rs. 98</span>. Gives Keralite pharmacists substantial retail margins to promote to their regular walk-in customers!
-              </div>
-            </div>
-          </div>
-
-          {/* --- Soft-Sell B2B Guide --- */}
-          <div className="bg-teal-950 text-teal-100 rounded-2xl p-5 shadow-xs relative overflow-hidden">
-            <div className="absolute bottom-0 right-0 translate-y-6 translate-x-6 opacity-10">
-              <Info className="w-32 h-32" />
-            </div>
-            <h4 className="font-semibold text-white text-sm flex items-center gap-2 mb-2 font-display">
-              💡 Sales Etiquette (The "No Pressure" Philosophy)
-            </h4>
-            <p className="text-xs text-teal-200 leading-relaxed mb-3">
-              Pharmacists in Kerala receive countless aggressive sales calls. This application generates messages that:
-            </p>
-            <ul className="text-xs space-y-1.5 text-teal-300">
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-400 font-bold">•</span>
-                <span>Check stock <strong>first</strong> before offering anything.</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-400 font-bold">•</span>
-                <span>Highlight the high margin naturally (MRP vs Rs.98).</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-400 font-bold">•</span>
-                <span>Refer to <strong>Dr. Reddy's</strong> to immediately establish brand authority.</span>
-              </li>
-              <li className="flex items-start gap-1.5">
-                <span className="text-emerald-400 font-bold">•</span>
-                <span>Invite questions rather than demanding a direct purchase.</span>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        {/* ================= CENTER GRID: MASS CUSTOMIZER & LIVE MESSAGE PREVIEW ================= */}
-        <section className={`col-span-1 lg:col-span-5 flex-col gap-6 lg:flex ${mobileTab === 'composer' ? 'flex' : 'hidden'}`} id="composer-section">
-          
-          {/* --- Vibe Tone Selector --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6">
-            <h3 className="text-base font-bold font-display tracking-tight text-slate-900 mb-4 flex items-center gap-2">
-              <Tag className="w-4 h-4 text-emerald-800" /> Step 1: Select Message Vibe
-            </h3>
-            
-            <div className="grid grid-cols-1 gap-2.5">
-              {VIBES.map((v) => {
-                const isSelected = vibe === v.id;
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => setVibe(v.id)}
-                    className={`text-left p-3 rounded-xl border transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'bg-emerald-50/50 border-emerald-300 shadow-3xs' 
-                        : 'bg-white hover:bg-slate-50 border-slate-100'
-                    }`}
+              {/* --- Filter & Quick Search Controls --- */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 font-display">
+                    <Search className="w-4 h-4 text-emerald-700" />
+                    <span>Search & Filters</span>
+                  </h3>
+                  <button 
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFilterType('all');
+                      setFilterCrm('All');
+                    }}
+                    className="text-[10px] text-slate-400 hover:text-emerald-700 font-semibold cursor-pointer"
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                        <span className="text-base">{v.emoji}</span> {v.label}
-                      </span>
-                      {isSelected && (
-                        <span className="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold">
-                          ✓
-                        </span>
-                      )}
+                    Reset Filters
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Search Query */}
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search store name, address..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 transition-all font-medium"
+                    />
+                  </div>
+
+                  {/* Filter by Mobile Type */}
+                  <div>
+                    <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block mb-1.5">
+                      Phone Channel Type
+                    </label>
+                    <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-lg">
+                      {['all', 'mobile', 'landline'].map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setFilterType(t as any)}
+                          className={`py-1 text-[10px] font-bold rounded-md capitalize transition-all cursor-pointer ${
+                            filterType === t 
+                              ? 'bg-white text-emerald-855 shadow-2xs border border-slate-200/50' 
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          {t}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-xs text-slate-500 leading-normal pl-5">
-                      {v.description}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                  </div>
 
-          {/* --- Custom Delivery/Distributor Notes --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6">
-            <h3 className="text-base font-bold font-display tracking-tight text-slate-900 mb-2 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-emerald-800" /> Step 2: Add Custom Notes (Optional)
-            </h3>
-            <p className="text-xs text-slate-400 mb-3">
-              Add details like delivery timings, specific discount limits, or free delivery options.
-            </p>
-            <textarea
-              value={extraNotes}
-              onChange={(e) => setExtraNotes(e.target.value)}
-              placeholder="e.g. Can deliver by tomorrow evening. Minimum order is 5 strips. Free shipping in Kollam/Trivandrum."
-              rows={2}
-              className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 resize-none bg-slate-50"
-            />
-          </div>
+                  {/* Filter by CRM Status */}
+                  <div>
+                    <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block mb-1.5">
+                      Pipeline Status
+                    </label>
+                    <select
+                      value={filterCrm}
+                      onChange={(e) => setFilterCrm(e.target.value as any)}
+                      className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 cursor-pointer"
+                    >
+                      <option value="All">All Pipeline Stages</option>
+                      <option value="None">New (Not Contacted)</option>
+                      <option value="Messaged">Messaged</option>
+                      <option value="Interested">Interested</option>
+                      <option value="Completed">Completed (Ordered)</option>
+                      <option value="Not Interested">Not Interested</option>
+                    </select>
+                  </div>
 
-          {/* --- Live Preview & Action Terminal --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-6 flex flex-col flex-1 relative min-h-[300px]">
-            
-            {/* Header with quick indicator */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Live Outbox Preview
-                </span>
+                  {/* Fast Action Buttons */}
+                  <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
+                    <button
+                      onClick={() => setIsAddingLead(true)}
+                      className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200/50 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Custom Pharmacy Lead</span>
+                    </button>
+                    <button
+                      onClick={handleResetAllCrmStatuses}
+                      className="w-full py-2 bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 hover:border-red-100 border border-slate-200 rounded-xl text-[10px] font-semibold transition-all cursor-pointer"
+                    >
+                      Reset All Send Statuses
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setMobileTab('stores')}
-                  className="lg:hidden text-[10px] font-bold text-emerald-850 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded border border-slate-200 mr-1.5 cursor-pointer"
-                >
-                  ← List
-                </button>
-                {isEditingMessage ? (
-                  <button 
-                    onClick={() => setIsEditingMessage(false)}
-                    className="text-xs text-emerald-800 hover:underline font-bold cursor-pointer"
-                  >
-                    Done Editing
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => setIsEditingMessage(true)}
-                    className="text-xs text-slate-500 hover:text-slate-800 hover:underline font-semibold cursor-pointer"
-                  >
-                    Edit Message
-                  </button>
-                )}
-              </div>
-            </div>
 
-            {/* Recipient summary */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-4 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Target Pharmacy</span>
-                <span className="text-xs font-bold text-slate-800">
-                  {selectedStore ? selectedStore.name : 'No pharmacy selected'}
-                </span>
-                <span className="text-[10px] text-slate-500 ml-2">
-                  ({selectedStore ? selectedStore.address : '—'})
-                </span>
-              </div>
-              <div>
-                <span className="text-xs font-mono bg-slate-200/60 px-2 py-0.5 rounded text-slate-600">
-                  {selectedStore ? selectedStore.phone : '—'}
-                </span>
-              </div>
-            </div>
-
-            {/* Textarea or formatted preview */}
-            <div className="flex-1 flex flex-col min-h-[160px] bg-emerald-50/20 rounded-xl border border-emerald-100/50 p-4">
-              {isGenerating ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-800 mb-3"></div>
-                  <p className="text-xs text-slate-500 font-medium animate-pulse">
-                    {isUsingGemini ? 'Gemini is custom-tailoring your message...' : 'Generating perfect template...'}
+              {/* --- Global Vibe & Special Notes Controller --- */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5 space-y-4">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2 font-display mb-1">
+                    <Sparkles className="w-4 h-4 text-purple-600" />
+                    <span>Global Message Customizer</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Changing these settings instantly updates all templates in real-time below!
                   </p>
                 </div>
-              ) : isEditingMessage ? (
-                <textarea
-                  value={generatedMessage}
-                  onChange={(e) => setGeneratedMessage(e.target.value)}
-                  className="flex-1 w-full bg-transparent border-0 outline-hidden focus:ring-0 text-xs leading-relaxed text-slate-700 font-sans resize-none"
-                  rows={8}
-                />
-              ) : (
-                <div className="flex-1 text-xs leading-relaxed text-slate-700 whitespace-pre-wrap select-text font-sans scrollbar-thin overflow-y-auto">
-                  {generatedMessage || "Select a store to preview output message..."}
-                </div>
-              )}
-            </div>
 
-            {/* Generate & send CTA buttons */}
-            <div className="mt-4 flex flex-col gap-2.5">
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleGenerateMessage(false)}
-                  disabled={isGenerating}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl border border-slate-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  Regenerate Vibe
-                </button>
-
-                {isUsingGemini && (
-                  <button
-                    onClick={() => handleGenerateMessage(true)}
-                    disabled={isGenerating}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-                    title="Force custom AI compilation"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    AI Smart Tweak
-                  </button>
-                )}
-              </div>
-
-              {/* Action grid: Copy & Send WhatsApp */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mt-1">
-                <button
-                  onClick={handleCopyToClipboard}
-                  disabled={!generatedMessage}
-                  className="sm:col-span-4 bg-slate-800 hover:bg-slate-900 active:bg-slate-950 text-white font-bold text-xs py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  Copy Text
-                </button>
-
-                <button
-                  onClick={handleLaunchWhatsApp}
-                  disabled={!generatedMessage || !selectedStore}
-                  className="sm:col-span-8 bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 text-white font-bold text-xs py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-700/10 hover:shadow-emerald-700/20 cursor-pointer disabled:opacity-50"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  Launch WhatsApp 💬
-                </button>
-              </div>
-
-              {/* Post message Quick status marker */}
-              {selectedStore && (
-                <div className="mt-2 border-t border-slate-100 pt-3 flex flex-col sm:flex-row items-center justify-between gap-2 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                    Quick CRM Logger:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1">
-                    <button
-                      onClick={() => handleUpdateCrmStatus(selectedStore.id, 'Messaged')}
-                      className={`px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                        selectedStore.crmStatus === 'Messaged' 
-                          ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-                          : 'bg-white hover:bg-slate-100 border border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Messaged
-                    </button>
-                    <button
-                      onClick={() => handleUpdateCrmStatus(selectedStore.id, 'Interested')}
-                      className={`px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                        selectedStore.crmStatus === 'Interested' 
-                          ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-                          : 'bg-white hover:bg-slate-100 border border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Interested
-                    </button>
-                    <button
-                      onClick={() => handleUpdateCrmStatus(selectedStore.id, 'Completed')}
-                      className={`px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                        selectedStore.crmStatus === 'Completed' 
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                          : 'bg-white hover:bg-slate-100 border border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Sold ✅
-                    </button>
-                    <button
-                      onClick={() => handleUpdateCrmStatus(selectedStore.id, 'Not Interested')}
-                      className={`px-2 py-1 rounded text-[10px] font-bold transition-colors cursor-pointer ${
-                        selectedStore.crmStatus === 'Not Interested' 
-                          ? 'bg-red-100 text-red-800 border border-red-200' 
-                          : 'bg-white hover:bg-slate-100 border border-slate-200 text-slate-600'
-                      }`}
-                    >
-                      Rejected
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* ================= RIGHT GRID: SEARCHABLE PHARMACIES & CRM MANAGEMENT ================= */}
-        <section className={`col-span-1 lg:col-span-3 lg:col-start-10 flex-col gap-6 lg:flex ${mobileTab === 'stores' ? 'flex' : 'hidden'}`} id="leads-section">
-          
-          {/* --- Custom Lead Adder Form --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5">
-            <button
-              onClick={() => setIsAddingLead(!isAddingLead)}
-              className="w-full flex items-center justify-between font-bold font-display text-slate-900 text-sm hover:text-emerald-800 transition-colors cursor-pointer"
-            >
-              <span className="flex items-center gap-1.5">
-                <Plus className="w-4 h-4 text-emerald-700" /> Add Custom Pharmacy Lead
-              </span>
-              <span className="text-xs text-slate-400">
-                {isAddingLead ? 'Collapse ━' : 'Expand ✚'}
-              </span>
-            </button>
-
-            <AnimatePresence>
-              {isAddingLead && (
-                <motion.form 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden mt-4 pt-3 border-t border-slate-100 flex flex-col gap-3"
-                  onSubmit={handleAddCustomLead}
-                >
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Pharmacy Name *
-                    </label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="e.g. Wellness Pharmacy"
-                      value={newLead.name}
-                      onChange={(e) => setNewLead({ ...newLead, name: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 bg-slate-50"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Phone Number (WhatsApp Preferable) *
-                    </label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="e.g. 9847753444 or landline"
-                      value={newLead.phone}
-                      onChange={(e) => setNewLead({ ...newLead, phone: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 bg-slate-50"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      City / Area (Kerala)
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Trivandrum, KL"
-                      value={newLead.address}
-                      onChange={(e) => setNewLead({ ...newLead, address: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 bg-slate-50"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Opening / Closing Hours
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Closes 21:00"
-                      value={newLead.hours}
-                      onChange={(e) => setNewLead({ ...newLead, hours: e.target.value })}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 bg-slate-50"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs py-2 rounded-lg transition-colors mt-2 flex items-center justify-center gap-1 cursor-pointer"
-                  >
-                    <Check className="w-3.5 h-3.5" /> Save New Lead
-                  </button>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* --- Leads Directory Main Container --- */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs p-5 flex flex-col max-h-[560px]">
-            
-            <div className="flex items-center justify-between mb-3.5">
-              <h3 className="text-sm font-bold font-display tracking-tight text-slate-900 flex items-center gap-1.5">
-                <StoreIcon className="w-4 h-4 text-emerald-800" /> Kerala Pharmacy List
-              </h3>
-              <span className="text-[10px] font-mono bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-bold">
-                {filteredStores.length} shown
-              </span>
-            </div>
-
-            {/* Directory search input */}
-            <div className="relative mb-3">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-              <input 
-                type="text" 
-                placeholder="Search name, phone, or town..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 pl-9 pr-3 py-2 text-xs text-slate-700 placeholder-slate-400 focus:outline-hidden focus:border-emerald-600 bg-slate-50"
-              />
-            </div>
-
-            {/* Quick Filters tab block */}
-            <div className="flex flex-col gap-2 mb-4 bg-slate-50 p-2 rounded-xl border border-slate-100 text-[10px]">
-              
-              {/* Type filter */}
-              <div className="flex items-center justify-between gap-1 border-b border-slate-200/50 pb-1.5 mb-1.5">
-                <span className="font-bold text-slate-400 uppercase tracking-wider">Device Type:</span>
-                <div className="flex gap-1">
-                  <button 
-                    onClick={() => setFilterType('all')} 
-                    className={`px-2 py-0.5 rounded-sm font-semibold transition-colors cursor-pointer ${filterType === 'all' ? 'bg-emerald-700 text-white' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                  >
-                    All
-                  </button>
-                  <button 
-                    onClick={() => setFilterType('mobile')} 
-                    className={`px-2 py-0.5 rounded-sm font-semibold transition-colors cursor-pointer ${filterType === 'mobile' ? 'bg-emerald-700 text-white' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                    title="Mobiles only (WhatsApp compatible)"
-                  >
-                    WhatsApp
-                  </button>
-                  <button 
-                    onClick={() => setFilterType('landline')} 
-                    className={`px-2 py-0.5 rounded-sm font-semibold transition-colors cursor-pointer ${filterType === 'landline' ? 'bg-emerald-700 text-white' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
-                  >
-                    Landline
-                  </button>
-                </div>
-              </div>
-
-              {/* CRM filter */}
-              <div className="flex items-center justify-between gap-1">
-                <span className="font-bold text-slate-400 uppercase tracking-wider flex items-center gap-0.5">
-                  <Filter className="w-2.5 h-2.5" /> status:
-                </span>
-                <select 
-                  value={filterCrm} 
-                  onChange={(e) => setFilterCrm(e.target.value)}
-                  className="rounded-sm bg-white border border-slate-200 text-slate-600 py-0.5 px-1 font-semibold focus:outline-hidden focus:border-emerald-600 cursor-pointer"
-                >
-                  <option value="All">All Statuses</option>
-                  <option value="None">Not Messaged</option>
-                  <option value="Messaged">Messaged</option>
-                  <option value="Interested">Interested</option>
-                  <option value="Completed">Purchased</option>
-                  <option value="Not Interested">Rejected</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Scrollable list card list */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-              {filteredStores.length === 0 ? (
-                <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                  <p className="text-xs text-slate-400 font-medium">No medical stores match this filter query.</p>
-                </div>
-              ) : (
-                filteredStores.map((s) => {
-                  const isSelected = selectedStoreId === s.id;
-                  
-                  // Get CRM styling
-                  let crmBadge = null;
-                  if (s.crmStatus === 'Messaged') crmBadge = 'bg-blue-50 text-blue-700 border-blue-100';
-                  else if (s.crmStatus === 'Interested') crmBadge = 'bg-amber-50 text-amber-700 border-amber-100';
-                  else if (s.crmStatus === 'Completed') crmBadge = 'bg-emerald-50 text-emerald-700 border-emerald-100';
-                  else if (s.crmStatus === 'Not Interested') crmBadge = 'bg-red-50 text-red-700 border-red-100';
-
-                  return (
-                    <div
-                      key={s.id}
-                      onClick={() => {
-                        setSelectedStoreId(s.id);
-                        if (window.innerWidth < 1024) {
-                          setMobileTab('composer');
-                        }
-                      }}
-                      className={`p-3 rounded-xl border transition-all text-left flex flex-col gap-1 cursor-pointer relative ${
-                        isSelected 
-                          ? 'bg-emerald-50/20 border-emerald-400 ring-1 ring-emerald-400/20 shadow-2xs' 
-                          : 'bg-white hover:bg-slate-50 border-slate-100'
-                      }`}
-                    >
-                      {/* Store name & CRM Badge */}
-                      <div className="flex items-start justify-between gap-1.5">
-                        <span className="text-xs font-bold text-slate-800 leading-tight block truncate pr-3" title={s.name}>
-                          {s.name}
-                        </span>
-                        
-                        {/* Custom Lead vs Standard Lead badge */}
-                        {s.isCustom && (
-                          <span className="text-[8px] bg-indigo-50 text-indigo-600 font-mono font-bold px-1 py-0.5 rounded border border-indigo-100 uppercase">
-                            Custom
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Store Address & Hour */}
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 truncate">
-                        <MapPin className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                        <span>{s.address}</span>
-                        {s.hours && s.hours !== '—' && (
-                          <>
-                            <span className="text-slate-300">•</span>
-                            <Clock className="w-3 h-3 text-slate-300 flex-shrink-0" />
-                            <span>{s.hours}</span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Phone, suspicious indicator & Action footer */}
-                      <div className="flex items-center justify-between border-t border-slate-100 pt-2 mt-1.5">
-                        <span className="text-[10px] font-mono font-medium text-slate-500 flex items-center gap-1">
-                          {s.isMobile ? (
-                            <span className="text-emerald-600 bg-emerald-50 px-1 rounded text-[8px] font-bold uppercase border border-emerald-100 flex items-center gap-0.5">
-                              WhatsApp
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 bg-slate-100 px-1 rounded text-[8px] font-bold uppercase border border-slate-200">
-                              Landline
-                            </span>
-                          )}
-                          <span>{s.phone}</span>
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          {s.crmStatus && s.crmStatus !== 'None' && (
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md border ${crmBadge}`}>
-                              {s.crmStatus}
-                            </span>
-                          )}
-
-                          {s.flagSuspicious && (
-                            <span 
-                              className="text-amber-500 bg-amber-50 p-1 rounded-md border border-amber-200 cursor-help"
-                              title={s.notes || "Wrong area code format detected."}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                triggerToast(s.notes || "Wrong phone area code detected.", 'info');
-                              }}
-                            >
-                              <AlertTriangle className="w-3.5 h-3.5" />
-                            </span>
-                          )}
-
-                          {s.isCustom && (
-                            <button
-                              onClick={(e) => handleDeleteLead(s.id, e)}
-                              className="p-1 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-md transition-colors border border-transparent hover:border-red-100 cursor-pointer"
-                              title="Delete custom lead"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                {/* Vibe Tone Select */}
+                <div>
+                  <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block mb-1.5">
+                    Select Voice Vibe / Tone
+                  </label>
+                  <div className="space-y-1 font-sans">
+                    {VIBES.map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => {
+                          setVibe(v.id);
+                          triggerToast(`Vibe switched to ${v.label}. All templates updated!`, 'info');
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl border text-xs flex items-start gap-2.5 transition-all cursor-pointer ${
+                          vibe === v.id
+                            ? 'bg-emerald-850 text-white border-emerald-850 shadow-xs font-semibold'
+                            : 'bg-slate-50 border-slate-100 hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <span className="text-base">{v.emoji}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold leading-tight">{v.label}</div>
+                          <div className={`text-[9px] truncate leading-tight mt-0.5 ${vibe === v.id ? 'text-emerald-200' : 'text-slate-400'}`}>
+                            {v.description}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </section>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-      </main>
+                {/* Global Custom Notes */}
+                <div>
+                  <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block mb-1.5">
+                    Global Special Note (Optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Free doorstep delivery on orders of 10+ boxes. Long June 2027 Expiry."
+                    value={extraNotes}
+                    onChange={(e) => setExtraNotes(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800 transition-all font-medium leading-relaxed font-sans"
+                  />
+                  <span className="text-[9px] text-slate-400 block mt-1 leading-tight">
+                    This note is appended dynamically inside all 20 store templates.
+                  </span>
+                </div>
+              </div>
+            </aside>
+
+            {/* ================= RIGHT MESSAGE FEED LIST (SPAN 8) ================= */}
+            <section className="col-span-1 lg:col-span-8 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Bulk Outreach Feed ({filteredStores.length} matched)
+                </div>
+                <div className="text-[11px] text-emerald-850 bg-emerald-50 px-2.5 py-1 rounded-full font-semibold border border-emerald-200/50">
+                  ⚡ Each box contains 30 Tablets (3x10s)
+                </div>
+              </div>
+
+              {filteredStores.length === 0 ? (
+                <div className="text-center py-16 px-6 bg-white rounded-2xl border border-dashed border-slate-200 p-8 shadow-2xs">
+                  <span className="text-4xl block mb-2">🏪</span>
+                  <h4 className="font-bold text-slate-800 text-sm">No Medical Stores Match Filter</h4>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Try clearing the search box or changing the pipeline filters on the left.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredStores.map((s) => {
+                    // Compute message for this store
+                    const isCustomEdited = s.customMessage !== undefined;
+                    const activeMessageText = isCustomEdited 
+                      ? s.customMessage! 
+                      : generateLocalTemplate(s, vibe, extraNotes);
+
+                    const isCopied = copiedStoreId === s.id;
+                    const isGeneratingThis = generatingStoreId === s.id;
+
+                    // CRM Badge helper
+                    let badgeClass = 'bg-slate-50 text-slate-500 border-slate-200';
+                    if (s.crmStatus === 'Messaged') badgeClass = 'bg-blue-50 text-blue-700 border-blue-200/60';
+                    else if (s.crmStatus === 'Interested') badgeClass = 'bg-amber-50 text-amber-700 border-amber-200/60';
+                    else if (s.crmStatus === 'Completed') badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200/60';
+                    else if (s.crmStatus === 'Not Interested') badgeClass = 'bg-red-50 text-red-700 border-red-200/60';
+
+                    return (
+                      <div 
+                        key={s.id}
+                        className={`bg-white border rounded-2xl p-5 shadow-2xs transition-all relative ${
+                          s.crmStatus === 'Completed' 
+                            ? 'border-emerald-300 bg-emerald-50/5' 
+                            : 'border-slate-100 hover:border-slate-200'
+                        }`}
+                      >
+                        {/* Card Header Info */}
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pb-3 border-b border-slate-100">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-800 text-sm sm:text-base leading-tight font-display">
+                                {s.name}
+                              </span>
+                              {s.isCustom && (
+                                <span className="text-[8px] bg-indigo-50 text-indigo-600 font-bold border border-indigo-100 px-1.5 py-0.5 rounded uppercase font-mono">
+                                  Custom
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400 mt-1 font-medium font-sans">
+                              <span className="flex items-center gap-1">
+                                <MapPin className="w-3.5 h-3.5 text-slate-300" />
+                                {s.address}
+                              </span>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-slate-300" />
+                                {s.hours}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Quick CRM status switcher inside list card */}
+                          <div className="flex items-center gap-2 flex-shrink-0 self-start sm:self-center font-sans">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                              Status:
+                            </span>
+                            <select
+                              value={s.crmStatus || 'None'}
+                              onChange={(e) => handleUpdateCrmStatus(s.id, e.target.value as any)}
+                              className={`py-1 px-2.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${badgeClass}`}
+                            >
+                              <option value="None">New (Unsent)</option>
+                              <option value="Messaged">Messaged</option>
+                              <option value="Interested">Interested</option>
+                              <option value="Completed">Ordered (Completed)</option>
+                              <option value="Not Interested">Not Interested</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Suspension Warning Box */}
+                        {s.flagSuspicious && (
+                          <div className="my-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2 leading-relaxed">
+                            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <div className="font-sans">
+                              <span className="font-bold">Phone Number Alert: </span>
+                              {s.notes || "This number has invalid formatting or is not a mobile number."}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Interactive Message Edit Textbox */}
+                        <div className="mt-4 relative font-sans">
+                          <label className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 block mb-1.5 flex justify-between items-center">
+                            <span>Draft Message for WhatsApp</span>
+                            {isCustomEdited ? (
+                              <button 
+                                onClick={() => {
+                                  const updated = stores.map(item => item.id === s.id ? { ...item, customMessage: undefined } : item);
+                                  saveStoresToLocal(updated);
+                                  triggerToast(`Restored message for ${s.name} to template default.`, 'info');
+                                }}
+                                className="text-emerald-700 hover:underline cursor-pointer flex items-center gap-0.5 font-bold"
+                              >
+                                ↺ Reset to Default Template
+                              </button>
+                            ) : (
+                              <span className="text-slate-400 italic">✨ Instant Template (Auto-Generated)</span>
+                            )}
+                          </label>
+
+                          <textarea
+                            rows={6}
+                            value={activeMessageText}
+                            onChange={(e) => {
+                              const updated = stores.map(item => item.id === s.id ? { ...item, customMessage: e.target.value } : item);
+                              saveStoresToLocal(updated);
+                            }}
+                            className={`w-full p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-800/25 focus:border-emerald-800 transition-all font-mono leading-relaxed text-slate-700`}
+                          />
+                        </div>
+
+                        {/* Action Toolbar */}
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 font-sans">
+                          
+                          {/* Left actions: AI enhancements */}
+                          <div>
+                            {isUsingGemini && (
+                              <button
+                                onClick={() => handleGenerateGeminiForStore(s)}
+                                disabled={isGeneratingThis}
+                                className={`py-1.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50`}
+                                title="Use Gemini AI to custom write a warm, bespoke draft just for this specific pharmacy"
+                              >
+                                {isGeneratingThis ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                )}
+                                <span>{isGeneratingThis ? 'Writing...' : '🪄 Personalized Gemini Draft'}</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Right actions: Copy & Send WhatsApp */}
+                          <div className="flex items-center gap-2">
+                            {s.isCustom && (
+                              <button
+                                onClick={(e) => {
+                                  if (window.confirm(`Delete Custom Lead ${s.name}?`)) {
+                                    handleDeleteLead(s.id, e);
+                                  }
+                                }}
+                                className="p-2 hover:bg-red-50 text-red-500 hover:text-red-700 rounded-xl transition-colors border border-transparent hover:border-red-100 cursor-pointer mr-1"
+                                title="Delete Custom Lead"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleCopyStoreMessageToClipboard(s.id, activeMessageText)}
+                              className={`py-2 px-3.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 cursor-pointer transition-all ${
+                                isCopied 
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                                  : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Copied!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy Message</span>
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleSendStoreWhatsApp(s, activeMessageText)}
+                              className="py-2 px-4 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                            >
+                              <Phone className="w-3.5 h-3.5 fill-white" />
+                              <span>Open WhatsApp ({s.phone})</span>
+                              <ExternalLink className="w-3 h-3 opacity-80" />
+                            </button>
+                          </div>
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
 
       {/* --- Beautiful Dynamic Toasts --- */}
       <AnimatePresence>

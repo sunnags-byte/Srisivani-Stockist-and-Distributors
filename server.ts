@@ -91,8 +91,9 @@ async function startServer() {
         Product Offer Details:
         - Brand: Glimy M2 Forte (Metformin Hydrochloride Prolonged Release 1000 mg and Glimepiride 2 mg Tablets IP)
         - Manufacturer: Dr. Reddy's Laboratories Ltd (A gold-standard, trusted Indian manufacturer)
-        - Our special wholesale/deal price: Rs. 98 per strip
-        - Original MRP: Rs. 194.25 (This is a massive savings / huge margin of nearly 50%)
+        - Pack Size: Box containing 30 tablets (3 blisters x 10 tablets)
+        - Our special wholesale/deal price: Rs. 98 per box (not per strip!)
+        - Original MRP: Rs. 194.25 per box (giving Keralite pharmacies nearly 50% retail margin)
         - Expiry Date: June 2027 (Long expiry date, highly safe for pharmacy shelf)
 
         Additional Custom Notes from Seller:

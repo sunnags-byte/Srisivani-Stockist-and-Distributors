@@ -10,6 +10,7 @@ export interface Store {
   crmStatus?: 'None' | 'Messaged' | 'Interested' | 'Not Interested' | 'Completed';
   lastMessagedAt?: string;
   isCustom?: boolean;
+  customMessage?: string;
 }
 
 export type VibeType = 'warm_friendly' | 'professional' | 'value_focused' | 'concise' | 'malayalam_english';
