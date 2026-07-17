@@ -1,0 +1,6 @@
+{
+  "name": "WhatsApp Pharma Broadcaster",
+  "description": "An automated, polite, and persuasive WhatsApp message generator and sender tailored for Glimy M2 Forte distribution to medical stores in Kerala.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
